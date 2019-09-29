@@ -58,7 +58,7 @@ func statusFromGithubStatus(s *github.Status) Status {
 	}
 }
 
-func makeMessageFromPullRequest(pr *github.PullRequest, title string, status *github.StatusResponse, checks *github.CheckRunsResponse) *hangouts.Message {
+func makeMessageFromPullRequest(pr *github.PullRequest, title string, repo string, status *github.StatusResponse, checks *github.CheckRunsResponse) *hangouts.Message {
 
 	statusSection := &hangouts.Section{
 		Header: "Checks",
@@ -132,7 +132,7 @@ func makeMessageFromPullRequest(pr *github.PullRequest, title string, status *gi
 			{
 				Header: makeCardHeader(pr, title, getOverallStatus(statusMap)),
 				Sections: []*hangouts.Section{
-					makeViewPullRequestSection(pr),
+					makeViewPullRequestSection(pr, repo),
 					makeAuthorSection(pr),
 					statusSection,
 				},
@@ -160,14 +160,27 @@ func makeCardHeader(pr *github.PullRequest, title string, overallStatus Status) 
 	}
 }
 
-func makeViewPullRequestSection(pr *github.PullRequest) *hangouts.Section {
+func makeViewPullRequestSection(pr *github.PullRequest, repo string) *hangouts.Section {
 	return &hangouts.Section{
 		Widgets: []*hangouts.WidgetMarkup{
 			{
-				Buttons: []*hangouts.Button{
-					{
+				// Buttons: []*hangouts.Button{
+				// 	{
+				// 		TextButton: &hangouts.TextButton{
+				// 			Text: fmt.Sprintf("View %s #%d", repo, pr.Number),
+				// 			OnClick: &hangouts.OnClick{
+				// 				OpenLink: &hangouts.OpenLink{
+				// 					Url: pr.HtmlUrl,
+				// 				},
+				// 			},
+				// 		},
+				// 	},
+				// },
+				KeyValue: &hangouts.KeyValue{
+					Content: fmt.Sprintf("%s#%d", repo, pr.Number),
+					Button: &hangouts.Button{
 						TextButton: &hangouts.TextButton{
-							Text: fmt.Sprintf("View Pull Request #%d", pr.Number),
+							Text: "View",
 							OnClick: &hangouts.OnClick{
 								OpenLink: &hangouts.OpenLink{
 									Url: pr.HtmlUrl,

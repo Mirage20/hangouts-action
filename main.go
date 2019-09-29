@@ -47,7 +47,8 @@ func main() {
 	default:
 		return
 	}
-	sendHangoutMessage(hc, fmt.Sprintf("%d", event.PullRequest.Number), makeMessageFromPullRequest(&event.PullRequest, title, getGitHubStatusResponse(ghc, githubSha), getGitHubCheckRunsResponse(ghc, githubSha)))
+	threadKey := fmt.Sprintf("%s-%d", githubRepo, event.PullRequest.Number)
+	sendHangoutMessage(hc, threadKey, makeMessageFromPullRequest(&event.PullRequest, title, githubRepo, getGitHubStatusResponse(ghc, githubSha), getGitHubCheckRunsResponse(ghc, githubSha)))
 
 	for {
 		time.Sleep(5 * time.Second)
@@ -75,7 +76,7 @@ func main() {
 			if overallStatus == StatusFailure {
 				checkTitle = "Some checks were not successful"
 			}
-			sendHangoutMessage(hc, fmt.Sprintf("%d", event.PullRequest.Number), makeMessageFromPullRequest(&event.PullRequest, checkTitle, statusResp, checkResp))
+			sendHangoutMessage(hc, threadKey, makeMessageFromPullRequest(&event.PullRequest, checkTitle, githubRepo, statusResp, checkResp))
 			break
 		}
 	}
