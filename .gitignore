@@ -1,0 +1,13 @@
+# Idea files
+.idea/
+*.iml
+
+# VSCode files
+.vscode/
+
+# vendor and build
+vendor/
+hangouts-action
+
+# Mac OS
+.DS_Store
