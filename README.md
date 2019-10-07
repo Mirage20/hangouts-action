@@ -23,7 +23,11 @@ jobs:
       - name: Send Message
         uses: docker://<your-repo>/hangouts-action:latest
         env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Name of this action. This is used to ignore the self check
+          SELF_ACTION_NAME: Hangouts
+          # Pull requests marked with this label are ignored when sending notifications
+          SKIP_NOTIFY_LABEL: work-in-progress
 ```
 
 

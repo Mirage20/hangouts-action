@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,8 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/mirage20/hangouts-action/github"
+	"github.com/google/go-github/v28/github"
+	// "github.com/mirage20/hangouts-action/github"
 	"github.com/mirage20/hangouts-action/hangouts"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -21,62 +24,54 @@ func main() {
 		fmt.Println(pair)
 	}
 	githubToken := getEnvOrFail("GITHUB_TOKEN")
-	githubRepo := getEnvOrFail("GITHUB_REPOSITORY")
+	// githubRepo := getEnvOrFail("GITHUB_REPOSITORY")
 	githubEventPath := getEnvOrFail("GITHUB_EVENT_PATH")
 	// Incorrect sha for forced push
 	// githubSha := getEnvOrFail("GITHUB_SHA")
-
 	event := loadEvent(githubEventPath)
 
-	ghc := github.NewClient(githubToken, githubRepo)
-	hc := hangouts.NewWebhookClient(webhookUrl)
+	if skipLabel, ok := os.LookupEnv("SKIP_NOTIFY_LABEL"); ok {
+		for _, l := range event.PullRequest.Labels {
+			if *l.Name == skipLabel {
+				return
+			}
+		}
+	}
 
-	_, err := ghc.Validate()
+	ctx := context.Background()
+	ghc := github.NewClient(oauth2.NewClient(
+		ctx,
+		oauth2.StaticTokenSource(&oauth2.Token{AccessToken: githubToken}),
+	))
+	hc := hangouts.NewWebhookClient(webhookUrl)
+	ha := &HangoutsAction{
+		githubClient:   ghc,
+		hangoutsClient: hc,
+		SelfActionName: getEnvOrFail("SELF_ACTION_NAME"),
+	}
+
+	err := ha.NotifyPullRequest(event, func(event *github.PullRequestEvent) bool {
+		return true
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	githubSha := event.PullRequest.Head.Sha
-	var title string
-	switch event.Action {
-	case "opened":
-		title = "New pull request is opened"
-	case "reopened":
-		title = "Pull request re-opened"
-	case "synchronize":
-		title = "Pull request updated"
-	default:
-		return
-	}
-	threadKey := fmt.Sprintf("%s-%d", githubRepo, event.PullRequest.Number)
-	sendHangoutMessage(hc, threadKey, makeMessageFromPullRequest(&event.PullRequest, title, githubRepo, getGitHubStatusResponse(ghc, githubSha), getGitHubCheckRunsResponse(ghc, githubSha)))
 
 	for {
-		time.Sleep(5 * time.Second)
-
-		statusResp := getGitHubStatusResponse(ghc, githubSha)
-		statusMap := make(map[Status]bool)
-		for _, v := range statusResp.Statuses {
-			status := statusFromGithubStatus(&v)
-			statusMap[status] = true
-		}
-
-		checkResp := getGitHubCheckRunsResponse(ghc, githubSha)
-
-		for _, v := range checkResp.CheckRuns {
-			// Skip our own check
-			if v.Name == "Hangouts" {
-				continue
+		time.Sleep(15 * time.Second)
+		done := false
+		err = ha.NotifyPullRequestChecks(event, func(event *github.PullRequestEvent, checks Checks) bool {
+			if checks.OverallStatus() == StatusFailure || checks.OverallStatus() == StatusSuccess {
+				done = true
+				return true
 			}
-			status := statusFromGithubCheckRun(&v)
-			statusMap[status] = true
+			// checks are in progress. no need to send message
+			return false
+		})
+		if err != nil {
+			log.Fatal(err)
 		}
-		overallStatus := getOverallStatus(statusMap)
-		if overallStatus == StatusFailure || overallStatus == StatusSuccess {
-			checkTitle := "All checks have passed"
-			if overallStatus == StatusFailure {
-				checkTitle = "Some checks were not successful"
-			}
-			sendHangoutMessage(hc, threadKey, makeMessageFromPullRequest(&event.PullRequest, checkTitle, githubRepo, statusResp, checkResp))
+		if done {
 			break
 		}
 	}
@@ -90,44 +85,16 @@ func getEnvOrFail(key string) string {
 	return v
 }
 
-func getGitHubStatusResponse(ghc *github.GitHub, sha string) *github.StatusResponse {
-	resp, err := ghc.Status(sha)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v\n", resp)
-	return resp
-}
-
-func getGitHubCheckRunsResponse(ghc *github.GitHub, sha string) *github.CheckRunsResponse {
-	resp, err := ghc.CheckRuns(sha)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v\n", resp)
-	return resp
-}
-
-func sendHangoutMessage(hc *hangouts.Hangouts, thread string, msg *hangouts.Message) {
-	m, err := hc.Send(thread, msg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v\n", m)
-	log.Printf("%+v\n", m.Thread)
-}
-
-func loadEvent(eventPath string) *github.Event {
+func loadEvent(eventPath string) *github.PullRequestEvent {
 	eventData, err := ioutil.ReadFile(eventPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println(string(eventData))
-	event := &github.Event{}
+	event := &github.PullRequestEvent{}
 	err = json.Unmarshal(eventData, event)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("%+v\n", event)
 	return event
 }

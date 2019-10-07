@@ -8,19 +8,19 @@ import (
 	"net/http"
 )
 
-type Hangouts struct {
+type Client struct {
 	*http.Client
 	URL string
 }
 
-func NewWebhookClient(url string) *Hangouts {
-	return &Hangouts{
+func NewWebhookClient(url string) *Client {
+	return &Client{
 		Client: &http.Client{},
 		URL:    url,
 	}
 }
 
-func (h *Hangouts) Send(threadKey string, msg *Message) (*Message, error) {
+func (h *Client) Send(threadKey string, msg *Message) (*Message, error) {
 	url := h.URL
 	if len(threadKey) > 0 {
 		url = fmt.Sprintf("%s&threadKey=%s", url, threadKey)
